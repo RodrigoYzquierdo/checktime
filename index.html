@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>CheckTime · Reloj Checador</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.13/dist/face-api.js"></script>
 <style>
   :root {
     --bg:#0b0c10;--surface:#13151a;--surface2:#1c1f27;--surface3:#252930;
@@ -37,12 +38,33 @@
   .login-switch{font-size:12px;color:var(--text2);margin-top:16px;}
   .login-switch a{color:var(--accent2);cursor:pointer;text-decoration:none;}
   .login-error{background:var(--red-dim);border:1px solid rgba(255,77,106,0.3);border-radius:var(--radius-sm);padding:10px 14px;font-size:12px;color:var(--red);margin-bottom:12px;display:none;}
+  .login-emp-link{margin-top:20px;padding-top:20px;border-top:1px solid var(--border);}
+  .btn-emp-access{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:11px;border-radius:var(--radius-sm);background:var(--surface2);color:var(--text);border:1px solid var(--border2);font-size:13px;font-weight:500;cursor:pointer;font-family:var(--font);transition:all 0.15s;}
+  .btn-emp-access:hover{border-color:var(--accent);background:var(--accent-dim);}
 
   /* ── ONBOARDING ── */
   #onboarding-screen{display:none;align-items:center;justify-content:center;min-height:100vh;padding:24px;}
   .onboarding-card{background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius);padding:40px;width:100%;max-width:460px;}
   .onboarding-title{font-size:20px;font-weight:700;margin-bottom:6px;}
   .onboarding-sub{font-size:13px;color:var(--text2);margin-bottom:28px;}
+
+  /* ── REGISTRO FACIAL (por invitación) ── */
+  #enroll-screen{display:none;align-items:center;justify-content:center;min-height:100vh;padding:24px;}
+  .enroll-card{background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius);padding:32px;width:100%;max-width:440px;}
+  .enroll-title{font-size:20px;font-weight:700;margin-bottom:6px;}
+  .enroll-sub{font-size:13px;color:var(--text2);margin-bottom:24px;}
+  .enroll-step{display:none;}
+  .enroll-step.active{display:block;}
+  .enroll-cam{position:relative;background:#000;border-radius:var(--radius);overflow:hidden;aspect-ratio:3/4;max-height:340px;margin:0 auto 16px;}
+  .enroll-cam video{width:100%;height:100%;object-fit:cover;transform:scaleX(-1);display:block;}
+  .enroll-cam-overlay{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none;}
+  .enroll-face-ring{width:160px;height:200px;border:3px solid var(--accent);border-radius:50%;transition:border-color 0.2s;}
+  .enroll-face-ring.ok{border-color:var(--green);}
+  .enroll-hint{margin-top:14px;background:rgba(0,0,0,0.65);border-radius:16px;padding:6px 16px;font-size:12px;color:var(--text2);}
+  .enroll-samples{display:flex;gap:8px;justify-content:center;margin-bottom:16px;}
+  .enroll-dot{width:10px;height:10px;border-radius:50%;background:var(--surface3);transition:all 0.2s;}
+  .enroll-dot.filled{background:var(--green);box-shadow:0 0 8px var(--green);}
+  .enroll-emp-preview{display:flex;align-items:center;gap:12px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;margin-bottom:20px;}
 
   /* ── APP ── */
   #app-screen{display:none;}
@@ -80,14 +102,18 @@
   .camera-container{position:relative;background:#000;border-radius:var(--radius);overflow:hidden;aspect-ratio:4/3;}
   #video{width:100%;height:100%;object-fit:cover;display:block;transform:scaleX(-1);}
   .camera-overlay{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none;}
-  .face-frame{width:180px;height:220px;border:2px solid var(--accent);border-radius:50%;position:relative;}
-  .face-frame::before{content:'';position:absolute;top:-2px;left:-2px;right:-2px;bottom:-2px;border-radius:50%;border:2px solid transparent;border-top-color:var(--accent2);animation:spin 2s linear infinite;}
+  .face-frame{width:180px;height:220px;border:2px solid var(--accent);border-radius:50%;position:relative;transition:border-color 0.2s;}
+  .face-frame.scanning::before{content:'';position:absolute;top:-2px;left:-2px;right:-2px;bottom:-2px;border-radius:50%;border:2px solid transparent;border-top-color:var(--accent2);animation:spin 2s linear infinite;}
   .scan-status{margin-top:16px;background:rgba(0,0,0,0.6);border:1px solid var(--border2);border-radius:20px;padding:6px 18px;font-size:12px;color:var(--text2);}
   .scan-status.scanning{color:var(--accent2);}
   .scan-status.success{color:var(--green);border-color:var(--green);}
   .scan-status.error{color:var(--red);border-color:var(--red);}
   .camera-disabled{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:12px;color:var(--text3);}
   #canvas{display:none;}
+  .mode-switch{display:flex;gap:2px;padding:4px;background:var(--surface2);border-radius:var(--radius-sm);width:fit-content;}
+  .mode-btn{padding:6px 14px;border-radius:6px;border:none;background:none;color:var(--text2);font-size:12px;font-family:var(--font);cursor:pointer;transition:all 0.15s;}
+  .mode-btn.active{background:var(--surface3);color:var(--text);}
+  .detected-emp{display:flex;align-items:center;gap:12px;background:var(--green-dim);border:1px solid var(--green);border-radius:var(--radius-sm);padding:12px 14px;margin-bottom:10px;}
 
   /* ── FORMS ── */
   .side-panel{display:flex;flex-direction:column;gap:16px;}
@@ -140,6 +166,9 @@
   .status-absent{background:var(--red-dim);color:var(--red);}
   .status-done{background:var(--surface2);color:var(--text2);}
   .emp-hours-text{font-size:13px;font-weight:600;color:var(--text2);min-width:55px;text-align:right;font-variant-numeric:tabular-nums;}
+  .face-badge{font-size:10px;padding:2px 7px;border-radius:10px;font-weight:600;white-space:nowrap;}
+  .face-yes{background:var(--green-dim);color:var(--green);}
+  .face-no{background:var(--amber-dim);color:var(--amber);}
 
   /* ── REPORTS ── */
   .report-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px;}
@@ -164,6 +193,9 @@
   .form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px;}
   .modal-actions{display:flex;gap:10px;margin-top:20px;}
   .modal-actions .btn{flex:1;}
+  .invite-code-box{background:var(--surface2);border:1px dashed var(--accent);border-radius:var(--radius-sm);padding:20px;text-align:center;margin:16px 0;}
+  .invite-code{font-size:28px;font-weight:800;letter-spacing:4px;color:var(--accent2);font-variant-numeric:tabular-nums;}
+  .invite-meta{font-size:11px;color:var(--text2);margin-top:8px;}
 
   /* ── CATALOGS ── */
   .cat-tabs{display:flex;gap:2px;background:var(--surface2);border-radius:var(--radius-sm);padding:4px;width:fit-content;margin-bottom:20px;}
@@ -175,7 +207,7 @@
   .cat-card-info{flex:1;min-width:0;}
   .cat-card-name{font-size:14px;font-weight:500;}
   .cat-card-meta{font-size:12px;color:var(--text2);margin-top:2px;}
-  .cat-card-actions{display:flex;gap:6px;flex-shrink:0;}
+  .cat-card-actions{display:flex;gap:6px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end;}
   .branch-icon{width:40px;height:40px;border-radius:var(--radius-sm);background:var(--accent-dim);color:var(--accent2);display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;}
   .page-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:12px;}
   .page-header h2{font-size:18px;font-weight:700;letter-spacing:-0.3px;}
@@ -191,6 +223,11 @@
   .toast.success{border-color:var(--green);}
   .toast.error{border-color:var(--red);}
 
+  /* ── MODEL LOADING PILL ── */
+  .model-pill{position:fixed;top:12px;left:50%;transform:translateX(-50%);background:var(--surface);border:1px solid var(--border2);border-radius:20px;padding:6px 16px;font-size:11px;color:var(--text2);z-index:150;display:none;align-items:center;gap:8px;}
+  .model-pill.show{display:flex;}
+  .model-pill .mini-spin{width:12px;height:12px;border:2px solid var(--border2);border-top-color:var(--accent);border-radius:50%;animation:spin 0.8s linear infinite;}
+
   /* ── MISC ── */
   .switch-role-bar{display:flex;gap:2px;padding:4px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);width:fit-content;}
   .role-toggle{padding:6px 14px;border-radius:6px;border:none;background:none;color:var(--text2);font-size:12px;font-family:var(--font);cursor:pointer;transition:all 0.15s;}
@@ -205,6 +242,9 @@
 </style>
 </head>
 <body>
+
+<!-- MODEL LOADING PILL -->
+<div class="model-pill" id="model-pill"><div class="mini-spin"></div><span>Cargando reconocimiento facial…</span></div>
 
 <!-- LOADING -->
 <div class="loading-overlay" id="loading-overlay">
@@ -229,6 +269,9 @@
       <button class="btn-login" onclick="loginEmail()">Iniciar sesión</button>
     </div>
     <div class="login-switch">¿No tienes cuenta? <a onclick="toggleRegister()">Regístrate</a></div>
+    <div class="login-emp-link">
+      <button class="btn-emp-access" onclick="showEnroll()">👤 Soy empleado · tengo un código</button>
+    </div>
   </div>
 </div>
 
@@ -244,6 +287,50 @@
       <div><label>Giro</label><input type="text" id="ob-giro" placeholder="Retail, Restaurante..."></div>
     </div>
     <button class="btn btn-primary" onclick="crearEmpresa()" style="margin-top:8px">Crear empresa y continuar →</button>
+  </div>
+</div>
+
+<!-- ENROLL: registro facial del empleado por código -->
+<div id="enroll-screen">
+  <div class="enroll-card">
+    <div class="login-logo" style="text-align:left;margin-bottom:6px">⬡ Check<span>Time</span></div>
+
+    <!-- Paso 1: ingresar código -->
+    <div class="enroll-step active" id="enroll-step-code">
+      <div class="enroll-title">Vincula tu rostro</div>
+      <div class="enroll-sub">Ingresa el código de invitación que te dio tu administrador.</div>
+      <div class="login-error" id="enroll-error"></div>
+      <div class="form-group">
+        <label>Código de invitación</label>
+        <input type="text" id="enroll-code" placeholder="CT-XXXX" style="text-transform:uppercase;letter-spacing:2px;font-size:16px;text-align:center" maxlength="12">
+      </div>
+      <button class="btn btn-primary" onclick="validarCodigo()">Continuar →</button>
+      <button class="btn btn-outline" style="margin-top:10px" onclick="backToLogin()">← Volver</button>
+    </div>
+
+    <!-- Paso 2: capturar rostro -->
+    <div class="enroll-step" id="enroll-step-face">
+      <div class="enroll-title">Toma tu foto</div>
+      <div class="enroll-sub">Mira a la cámara. Capturaremos 3 muestras para mejor precisión.</div>
+      <div class="enroll-emp-preview" id="enroll-emp-preview"></div>
+      <div class="enroll-cam">
+        <video id="enroll-video" autoplay muted playsinline></video>
+        <div class="enroll-cam-overlay"><div class="enroll-face-ring" id="enroll-ring"></div></div>
+      </div>
+      <div class="enroll-hint" id="enroll-hint" style="text-align:center;margin-bottom:12px">Buscando tu rostro…</div>
+      <div class="enroll-samples" id="enroll-samples">
+        <div class="enroll-dot"></div><div class="enroll-dot"></div><div class="enroll-dot"></div>
+      </div>
+      <button class="btn btn-primary" id="enroll-capture-btn" onclick="capturarMuestra()" disabled>Capturar muestra (0/3)</button>
+    </div>
+
+    <!-- Paso 3: éxito -->
+    <div class="enroll-step" id="enroll-step-done" style="text-align:center">
+      <div style="font-size:48px;margin:20px 0">✅</div>
+      <div class="enroll-title">¡Rostro registrado!</div>
+      <div class="enroll-sub" id="enroll-done-msg">Ya puedes checar en el dispositivo de tu centro de trabajo.</div>
+      <button class="btn btn-primary" onclick="backToLogin()">Entendido</button>
+    </div>
   </div>
 </div>
 
@@ -274,9 +361,9 @@
   <div class="page active" id="page-checador">
     <div class="clock-bar">
       <div><div id="live-clock">00:00:00</div><div id="live-date"></div></div>
-      <div class="switch-role-bar">
-        <button class="role-toggle active" id="toggle-emp" onclick="switchRole('empleado')">Empleado</button>
-        <button class="role-toggle" id="toggle-adm" onclick="switchRole('admin')">Admin</button>
+      <div class="mode-switch">
+        <button class="mode-btn active" id="mode-kiosko" onclick="setModo('kiosko')">🏢 Kiosko</button>
+        <button class="mode-btn" id="mode-individual" onclick="setModo('individual')">👤 Individual</button>
       </div>
     </div>
     <div class="scan-layout">
@@ -285,7 +372,7 @@
           <video id="video" autoplay muted playsinline></video>
           <canvas id="canvas"></canvas>
           <div class="camera-overlay">
-            <div class="face-frame" id="face-frame"></div>
+            <div class="face-frame scanning" id="face-frame"></div>
             <div class="scan-status scanning" id="scan-status">Posiciona tu rostro en el marco</div>
           </div>
           <div class="camera-disabled" id="camera-disabled" style="display:none">
@@ -300,11 +387,14 @@
         </div>
       </div>
       <div class="side-panel">
-        <div class="card">
-          <div class="card-title">Empleado</div>
-          <div class="field-label">Selecciona tu nombre</div>
-          <select id="emp-select"><option value="">— seleccionar —</option></select>
-          <div id="emp-branch-info" style="margin-top:10px;font-size:12px;color:var(--text2);display:none"></div>
+        <div class="card" id="detected-card" style="display:none">
+          <div class="card-title">Identificado</div>
+          <div id="detected-emp-box"></div>
+        </div>
+        <div class="card" id="individual-card" style="display:none">
+          <div class="card-title">Empleado (este dispositivo)</div>
+          <div id="individual-emp-box"></div>
+          <button class="btn btn-outline btn-sm" style="width:100%;margin-top:10px" onclick="desvincularDispositivo()">Desvincular dispositivo</button>
         </div>
         <div class="card">
           <div class="card-title">Ubicación GPS</div>
@@ -458,6 +548,25 @@
   </div>
 </div>
 
+<!-- MODAL INVITACIÓN -->
+<div class="modal-backdrop" id="modal-invite">
+  <div class="modal">
+    <div class="modal-title"><span>Código de invitación</span><button class="modal-close" onclick="closeModal('modal-invite')">×</button></div>
+    <div style="font-size:13px;color:var(--text2);margin-bottom:4px" id="invite-emp-name"></div>
+    <div class="invite-code-box">
+      <div class="invite-code" id="invite-code-display">—</div>
+      <div class="invite-meta" id="invite-meta"></div>
+    </div>
+    <div style="font-size:12px;color:var(--text2);line-height:1.7">
+      Comparte este código con el empleado. Al abrir la app, elige <strong style="color:var(--text)">"Soy empleado · tengo un código"</strong>, lo ingresa y registra su rostro. El código expira en 7 días y solo se puede usar una vez.
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="copyInvite()">📋 Copiar código</button>
+      <button class="btn btn-primary" onclick="shareInviteWhatsApp()">Compartir por WhatsApp</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"><span id="toast-icon"></span><span id="toast-msg"></span></div>
 
 <script>
@@ -476,6 +585,25 @@ let currentEmpresaId = null;
 let branches = [];
 let employees = [];
 let events = [];
+
+// Face recognition state
+let faceModelsLoaded = false;
+let modoChecador = 'kiosko';           // 'kiosko' | 'individual'
+let detectedEmpId = null;              // empleado identificado (kiosko) o vinculado (individual)
+let recognitionLoop = null;            // setInterval del loop de reconocimiento
+let faceMatcher = null;                // FaceMatcher de face-api con todos los descriptores
+const FACE_THRESHOLD = 0.5;            // distancia máxima para considerar match (menor = más estricto)
+const MODELS_URL = '/models';          // carpeta de modelos en el repo
+
+// Enroll state
+let enrollInvitacion = null;           // fila de invitacion validada
+let enrollEmpleado = null;             // empleado ligado a la invitacion
+let enrollSamples = [];                // descriptores capturados (hasta 3)
+let enrollStream = null;               // MediaStream de la cámara de registro
+let enrollDetectLoop = null;
+
+// Dispositivo vinculado (modo individual) — guardado en localStorage
+const DEVICE_KEY = 'checktime_emp_vinculado';
 
 const COLORS=[
   {c:'#8b85ff',bg:'rgba(139,133,255,0.15)'},{c:'#00d68f',bg:'rgba(0,214,143,0.12)'},
@@ -502,6 +630,55 @@ function empAvatarHtml(emp,size=36){
 // LOADING
 // ══════════════════════════════════════════════════════════
 function showLoading(v){document.getElementById('loading-overlay').classList.toggle('show',v);}
+
+// ══════════════════════════════════════════════════════════
+// FACE-API — carga de modelos y utilidades
+// ══════════════════════════════════════════════════════════
+async function loadFaceModels(){
+  if(faceModelsLoaded)return true;
+  if(typeof faceapi==='undefined'){
+    console.warn('face-api aún no disponible, reintentando…');
+    await new Promise(r=>setTimeout(r,400));
+    if(typeof faceapi==='undefined')return false;
+  }
+  const pill=document.getElementById('model-pill');
+  pill.classList.add('show');
+  try{
+    await faceapi.nets.tinyFaceDetector.loadFromUri(MODELS_URL);
+    await faceapi.nets.faceLandmark68Net.loadFromUri(MODELS_URL);
+    await faceapi.nets.faceRecognitionNet.loadFromUri(MODELS_URL);
+    faceModelsLoaded=true;
+    pill.classList.remove('show');
+    return true;
+  }catch(err){
+    console.error('Error cargando modelos faciales:',err);
+    pill.innerHTML='<span style="color:var(--red)">⚠ No se pudieron cargar los modelos faciales</span>';
+    setTimeout(()=>pill.classList.remove('show'),4000);
+    return false;
+  }
+}
+
+// Detecta UN rostro en un elemento de video y devuelve su descriptor (Float32Array) o null
+async function getDescriptorFromVideo(videoEl){
+  if(!faceModelsLoaded)return null;
+  const det=await faceapi
+    .detectSingleFace(videoEl,new faceapi.TinyFaceDetectorOptions({inputSize:320,scoreThreshold:0.5}))
+    .withFaceLandmarks()
+    .withFaceDescriptor();
+  return det?det.descriptor:null;
+}
+
+// Construye el FaceMatcher a partir de los empleados con descriptor guardado
+function buildFaceMatcher(){
+  const labeled=[];
+  employees.forEach(e=>{
+    if(e.descriptor_facial && Array.isArray(e.descriptor_facial) && e.descriptor_facial.length===128){
+      labeled.push(new faceapi.LabeledFaceDescriptors(e.id,[new Float32Array(e.descriptor_facial)]));
+    }
+  });
+  faceMatcher = labeled.length ? new faceapi.FaceMatcher(labeled,FACE_THRESHOLD) : null;
+  return faceMatcher;
+}
 
 // ══════════════════════════════════════════════════════════
 // AUTH
@@ -549,11 +726,13 @@ async function loginEmail(){
 }
 
 async function logout(){
+  stopRecognitionLoop();
   await sb.auth.signOut();
   currentUser=null;currentEmpresaId=null;branches=[];employees=[];events=[];
   document.getElementById('login-screen').style.display='flex';
   document.getElementById('app-screen').style.display='none';
   document.getElementById('onboarding-screen').style.display='none';
+  document.getElementById('enroll-screen').style.display='none';
 }
 
 // ══════════════════════════════════════════════════════════
@@ -563,25 +742,21 @@ async function initSession(user){
   currentUser=user;
   showLoading(true);
 
-  // Actualizar avatar nav
   const initials=(user.user_metadata?.full_name||user.email||'?').split(' ').map(w=>w[0]).join('').substring(0,2).toUpperCase();
   document.getElementById('nav-avatar').textContent=initials;
   if(user.user_metadata?.avatar_url){
     document.getElementById('nav-avatar').innerHTML=`<img src="${user.user_metadata.avatar_url}" style="width:100%;height:100%;border-radius:50%;object-fit:cover">`;
   }
 
-  // Cargar empresas del usuario
   const {data:membs}=await sb.from('usuario_empresa').select('empresa_id,rol,empresa(id,nombre,plan)').eq('activo',true);
 
   if(!membs||membs.length===0){
-    // Sin empresa → onboarding
     showLoading(false);
     document.getElementById('login-screen').style.display='none';
     document.getElementById('onboarding-screen').style.display='flex';
     return;
   }
 
-  // Poblar selector de empresas
   const sel=document.getElementById('empresa-sel');
   sel.innerHTML='';
   membs.forEach(m=>{
@@ -591,22 +766,29 @@ async function initSession(user){
     sel.appendChild(opt);
   });
 
-  // Activar primera empresa
   currentEmpresaId=membs[0].empresa.id;
   document.getElementById('empresa-plan').textContent=membs[0].empresa.plan.toUpperCase();
 
-  // Timeout de seguridad — si tarda mas de 8s continua igual
   await Promise.race([loadEmpresaData(),new Promise(r=>setTimeout(r,8000))]);
   showLoading(false);
   document.getElementById("login-screen").style.display="none";
   document.getElementById("onboarding-screen").style.display="none";
+  document.getElementById("enroll-screen").style.display="none";
   document.getElementById("app-screen").style.display="block";
-  populateEmpSelect();
-  populateEmpBranchSelect();
-  startCamera();
   initLocation();
   renderTodayLog();
   tick();setInterval(tick,1000);
+
+  // Cargar modelos faciales en segundo plano y arrancar el checador
+  loadFaceModels().then(ok=>{
+    if(ok){
+      buildFaceMatcher();
+      restoreDeviceBinding();
+      startCamera().then(()=>startRecognitionLoop());
+    }else{
+      startCamera();
+    }
+  });
 }
 
 async function cambiarEmpresa(id){
@@ -615,7 +797,8 @@ async function cambiarEmpresa(id){
   await loadEmpresaData();
   showLoading(false);
   renderTodayLog();
-  populateEmpSelect();
+  buildFaceMatcher();
+  restoreDeviceBinding();
   if(document.getElementById('page-admin').classList.contains('active'))renderAdmin();
   if(document.getElementById('page-catalogos').classList.contains('active')){renderBranches();renderEmpCatalog();}
 }
@@ -678,51 +861,154 @@ function switchCatTab(tab){
   document.getElementById('ctab-sucursales').classList.toggle('active',tab==='sucursales');
   document.getElementById('ctab-empleados').classList.toggle('active',tab==='empleados');
 }
-function switchRole(role){
-  document.getElementById('toggle-emp').classList.toggle('active',role==='empleado');
-  document.getElementById('toggle-adm').classList.toggle('active',role==='admin');
-}
 
 // ══════════════════════════════════════════════════════════
-// CAMERA
+// CAMERA + RECONOCIMIENTO FACIAL (checador)
 // ══════════════════════════════════════════════════════════
-let faceDetected=false;
 async function startCamera(){
   try{
     const s=await navigator.mediaDevices.getUserMedia({video:{facingMode:'user'},audio:false});
     const v=document.getElementById('video');v.srcObject=s;
     document.getElementById('camera-disabled').style.display='none';
     v.style.display='block';
+    await v.play().catch(()=>{});
+    return true;
   }catch{
     document.getElementById('video').style.display='none';
     document.getElementById('camera-disabled').style.display='flex';
+    return false;
   }
 }
-document.addEventListener('change',e=>{
-  if(e.target.id!=='emp-select')return;
-  faceDetected=false;
-  document.getElementById('scan-status').textContent='Escaneando...';
-  document.getElementById('scan-status').className='scan-status scanning';
-  document.getElementById('face-frame').style.borderColor='var(--accent)';
-  updateBtns();showEmpBranchInfo();
-  if(!e.target.value){document.getElementById('emp-stats-card').style.display='none';return;}
-  setTimeout(()=>{
-    faceDetected=true;
-    document.getElementById('scan-status').textContent='✓ Rostro reconocido';
-    document.getElementById('scan-status').className='scan-status success';
-    document.getElementById('face-frame').style.borderColor='var(--green)';
-    updateBtns();renderEmpStats();
-  },1800);
-});
-function showEmpBranchInfo(){
-  const id=document.getElementById('emp-select').value;
-  const info=document.getElementById('emp-branch-info');
-  if(!id){info.style.display='none';return;}
-  const emp=empById(id),branch=emp?branchById(emp.sucursal_id):null;
-  info.style.display='block';
-  info.innerHTML=branch
-    ?`📍 <strong style="color:var(--text)">${branch.nombre}</strong> · Entrada ${emp.hora_entrada||'09:00'} — Salida ${emp.hora_salida||'18:00'}`
-    :`<span style="color:var(--amber)">⚠ Sin sucursal asignada</span>`;
+
+function setScanUI(state,text){
+  const st=document.getElementById('scan-status');
+  const fr=document.getElementById('face-frame');
+  st.textContent=text;
+  st.className='scan-status '+(state||'');
+  fr.classList.toggle('scanning',state==='scanning'||state==='');
+  fr.style.borderColor = state==='success' ? 'var(--green)' : state==='error' ? 'var(--red)' : 'var(--accent)';
+}
+
+function stopRecognitionLoop(){
+  if(recognitionLoop){clearInterval(recognitionLoop);recognitionLoop=null;}
+}
+
+// Loop principal: cada ~1.2s intenta reconocer el rostro frente a la cámara
+function startRecognitionLoop(){
+  stopRecognitionLoop();
+  if(!faceModelsLoaded)return;
+  const video=document.getElementById('video');
+
+  recognitionLoop=setInterval(async()=>{
+    if(document.hidden)return;
+    if(!video.srcObject||video.readyState<2)return;
+
+    const desc=await getDescriptorFromVideo(video);
+
+    if(!desc){
+      // No hay rostro visible
+      if(modoChecador==='kiosko'){
+        detectedEmpId=null;
+        document.getElementById('detected-card').style.display='none';
+        setScanUI('scanning','Posiciona tu rostro en el marco');
+        updateBtns();
+      }else{
+        setScanUI('scanning','Mira a la cámara para checar');
+      }
+      return;
+    }
+
+    if(modoChecador==='kiosko'){
+      // Identificación 1:N
+      if(!faceMatcher){setScanUI('error','No hay rostros registrados aún');return;}
+      const best=faceMatcher.findBestMatch(desc);
+      if(best.label!=='unknown'){
+        const emp=empById(best.label);
+        if(emp){
+          detectedEmpId=emp.id;
+          showDetectedEmp(emp,best.distance);
+          setScanUI('success','✓ '+empFull(emp));
+          updateBtns();
+        }
+      }else{
+        detectedEmpId=null;
+        document.getElementById('detected-card').style.display='none';
+        setScanUI('scanning','Rostro no reconocido');
+        updateBtns();
+      }
+    }else{
+      // Verificación 1:1 (modo individual)
+      if(!detectedEmpId){setScanUI('error','Este dispositivo no está vinculado');return;}
+      const emp=empById(detectedEmpId);
+      if(!emp||!emp.descriptor_facial){setScanUI('error','Sin rostro registrado');return;}
+      const dist=faceapi.euclideanDistance(desc,new Float32Array(emp.descriptor_facial));
+      if(dist<=FACE_THRESHOLD){
+        setScanUI('success','✓ '+empFull(emp));
+        emp._faceOk=true;
+        updateBtns();
+      }else{
+        emp._faceOk=false;
+        setScanUI('error','No coincide con el rostro registrado');
+        updateBtns();
+      }
+    }
+  },1200);
+}
+
+function showDetectedEmp(emp,distance){
+  const card=document.getElementById('detected-card');
+  const box=document.getElementById('detected-emp-box');
+  const branch=branchById(emp.sucursal_id);
+  const conf=Math.max(0,Math.round((1-distance/0.6)*100));
+  box.innerHTML=`<div class="detected-emp">
+    ${empAvatarHtml(emp,42)}
+    <div style="flex:1;min-width:0">
+      <div style="font-weight:600;font-size:14px">${empFull(emp)}</div>
+      <div style="font-size:11px;color:var(--text2)">${branch?branch.nombre:'Sin sucursal'} · Confianza ${conf}%</div>
+    </div>
+  </div>`;
+  card.style.display='block';
+}
+
+function setModo(m){
+  modoChecador=m;
+  document.getElementById('mode-kiosko').classList.toggle('active',m==='kiosko');
+  document.getElementById('mode-individual').classList.toggle('active',m==='individual');
+  document.getElementById('detected-card').style.display='none';
+  document.getElementById('individual-card').style.display=m==='individual'?'block':'none';
+  if(m==='individual'){
+    restoreDeviceBinding();
+  }else{
+    detectedEmpId=null;
+  }
+  updateBtns();
+}
+
+// ── Vinculación de dispositivo (modo individual) ──
+function restoreDeviceBinding(){
+  const bound=localStorage.getItem(DEVICE_KEY);
+  const box=document.getElementById('individual-emp-box');
+  if(bound && empById(bound)){
+    detectedEmpId = modoChecador==='individual' ? bound : detectedEmpId;
+    const emp=empById(bound);
+    const branch=branchById(emp.sucursal_id);
+    box.innerHTML=`<div class="detected-emp">
+      ${empAvatarHtml(emp,42)}
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:600;font-size:14px">${empFull(emp)}</div>
+        <div style="font-size:11px;color:var(--text2)">${branch?branch.nombre:'Sin sucursal'}</div>
+      </div>
+    </div>`;
+  }else{
+    box.innerHTML=`<div style="font-size:12px;color:var(--text2)">Este dispositivo no está vinculado a ningún empleado. El empleado debe registrarse con su código desde "Soy empleado" en la pantalla de inicio, y su rostro quedará vinculado aquí.</div>`;
+  }
+}
+function desvincularDispositivo(){
+  localStorage.removeItem(DEVICE_KEY);
+  detectedEmpId=null;
+  restoreDeviceBinding();
+  updateBtns();
+  showToast('✓','Dispositivo desvinculado','');
 }
 
 // ══════════════════════════════════════════════════════════
@@ -758,9 +1044,15 @@ function setLocUI(ok,txt,det=''){
 // BOTONES CHECADO
 // ══════════════════════════════════════════════════════════
 function updateBtns(){
-  const id=document.getElementById('emp-select').value;
-  const ok=id&&faceDetected&&locVerified;
+  const id=detectedEmpId;
+  let faceOk=false;
+  if(id){
+    if(modoChecador==='kiosko')faceOk=true;               // en kiosko, si hay match ya es válido
+    else{const emp=empById(id);faceOk=emp?!!emp._faceOk:false;}
+  }
+  const ok=id&&faceOk&&locVerified;
   const empEvs=events.filter(e=>e.empleado_id===id&&e.fecha===todayStr());
+  empEvs.sort((a,b)=>new Date(b.timestamp)-new Date(a.timestamp));
   const last=empEvs[0];
   const isIn=last&&last.tipo==='entrada';
   document.getElementById('btn-entrada').disabled=!ok||isIn;
@@ -771,8 +1063,8 @@ function updateBtns(){
 // REGISTRAR EVENTO → SUPABASE
 // ══════════════════════════════════════════════════════════
 async function registrarEvento(tipo){
-  const empId=document.getElementById('emp-select').value;
-  const emp=empById(empId);if(!emp)return;
+  const empId=detectedEmpId;
+  const emp=empById(empId);if(!emp){showToast('⚠','No hay empleado identificado','error');return;}
   const branch=nearBranch||branchById(emp.sucursal_id);
   const now=new Date();
 
@@ -788,21 +1080,198 @@ async function registrarEvento(tipo){
     fecha:todayStr(),
     lat:userLoc?.lat||null,
     lng:userLoc?.lng||null,
-    fuente:'app',
+    fuente:modoChecador==='kiosko'?'kiosko':'app',
     confianza_facial:null,
   };
 
   const {data,error}=await sb.from('evento').insert(payload).select().single();
   if(error){showToast('⚠','Error al registrar: '+error.message,'error');updateBtns();return;}
 
-  // Actualizar estado local
   events.unshift(data);
-  showToast(tipo==='entrada'?'✓':'⏎',`${tipo==='entrada'?'Entrada':'Salida'} registrada — ${padZ(now.getHours())}:${padZ(now.getMinutes())}`,tipo==='entrada'?'success':'');
+  showToast(tipo==='entrada'?'✓':'⏎',`${tipo==='entrada'?'Entrada':'Salida'} · ${empFull(emp)} — ${padZ(now.getHours())}:${padZ(now.getMinutes())}`,tipo==='entrada'?'success':'');
   updateBtns();renderTodayLog();renderEmpStats();
+
+  // En kiosko, tras registrar limpiamos para el siguiente empleado
+  if(modoChecador==='kiosko'){
+    setTimeout(()=>{
+      detectedEmpId=null;
+      document.getElementById('detected-card').style.display='none';
+      setScanUI('scanning','Posiciona tu rostro en el marco');
+      updateBtns();
+    },2500);
+  }
 }
 
 // ══════════════════════════════════════════════════════════
-// TODAY LOG
+// ENROLL — registro facial del empleado por código de invitación
+// ══════════════════════════════════════════════════════════
+function showEnroll(){
+  document.getElementById('login-screen').style.display='none';
+  document.getElementById('enroll-screen').style.display='flex';
+  document.getElementById('enroll-step-code').classList.add('active');
+  document.getElementById('enroll-step-face').classList.remove('active');
+  document.getElementById('enroll-step-done').classList.remove('active');
+  document.getElementById('enroll-code').value='';
+  document.getElementById('enroll-error').style.display='none';
+  enrollInvitacion=null;enrollEmpleado=null;enrollSamples=[];
+  // Precargar modelos desde ya
+  loadFaceModels();
+}
+function backToLogin(){
+  stopEnrollCamera();
+  document.getElementById('enroll-screen').style.display='none';
+  document.getElementById('login-screen').style.display='flex';
+}
+
+async function validarCodigo(){
+  const code=document.getElementById('enroll-code').value.trim().toUpperCase();
+  const errEl=document.getElementById('enroll-error');
+  errEl.style.display='none';
+  if(!code){errEl.textContent='Ingresa tu código';errEl.style.display='block';return;}
+
+  showLoading(true);
+  // Buscar invitación por código
+  const {data:inv,error}=await sb.from('invitacion').select('*').eq('codigo',code).maybeSingle();
+  showLoading(false);
+
+  if(error){errEl.textContent='Error de conexión. Intenta de nuevo.';errEl.style.display='block';return;}
+  if(!inv){errEl.textContent='Código no encontrado. Verifica con tu administrador.';errEl.style.display='block';return;}
+  if(inv.status==='usada'){errEl.textContent='Este código ya fue utilizado.';errEl.style.display='block';return;}
+  if(inv.status==='expirada'||(inv.expira_at && new Date(inv.expira_at)<new Date())){
+    errEl.textContent='Este código ha expirado. Pide uno nuevo.';errEl.style.display='block';return;
+  }
+
+  // Cargar empleado ligado a la invitación
+  const {data:emp}=await sb.from('empleado').select('*').eq('id',inv.empleado_id).maybeSingle();
+  if(!emp){errEl.textContent='El empleado de esta invitación ya no existe.';errEl.style.display='block';return;}
+
+  enrollInvitacion=inv;
+  enrollEmpleado=emp;
+  enrollSamples=[];
+
+  // Preparar paso 2
+  const branch=null; // no cargamos sucursal aquí para no exponer datos
+  document.getElementById('enroll-emp-preview').innerHTML=`
+    ${empAvatarHtml(emp,42)}
+    <div style="flex:1;min-width:0">
+      <div style="font-weight:600">${empFull(emp)}</div>
+      <div style="font-size:11px;color:var(--text2)">${emp.puesto||'Empleado'}</div>
+    </div>`;
+  updateEnrollSamplesUI();
+  document.getElementById('enroll-capture-btn').disabled=true;
+  document.getElementById('enroll-capture-btn').textContent='Capturar muestra (0/3)';
+
+  document.getElementById('enroll-step-code').classList.remove('active');
+  document.getElementById('enroll-step-face').classList.add('active');
+
+  const ok=await loadFaceModels();
+  if(!ok){document.getElementById('enroll-hint').textContent='No se pudieron cargar los modelos. Revisa tu conexión.';return;}
+  await startEnrollCamera();
+  startEnrollDetectLoop();
+}
+
+async function startEnrollCamera(){
+  try{
+    enrollStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'user'},audio:false});
+    const v=document.getElementById('enroll-video');
+    v.srcObject=enrollStream;
+    await v.play().catch(()=>{});
+  }catch{
+    document.getElementById('enroll-hint').textContent='No se pudo acceder a la cámara.';
+  }
+}
+function stopEnrollCamera(){
+  if(enrollDetectLoop){clearInterval(enrollDetectLoop);enrollDetectLoop=null;}
+  if(enrollStream){enrollStream.getTracks().forEach(t=>t.stop());enrollStream=null;}
+}
+
+let enrollFaceReady=false;
+function startEnrollDetectLoop(){
+  const v=document.getElementById('enroll-video');
+  const ring=document.getElementById('enroll-ring');
+  const hint=document.getElementById('enroll-hint');
+  const btn=document.getElementById('enroll-capture-btn');
+  if(enrollDetectLoop)clearInterval(enrollDetectLoop);
+  enrollDetectLoop=setInterval(async()=>{
+    if(!v.srcObject||v.readyState<2)return;
+    const det=await faceapi.detectSingleFace(v,new faceapi.TinyFaceDetectorOptions({inputSize:320,scoreThreshold:0.5}));
+    if(det){
+      enrollFaceReady=true;
+      ring.classList.add('ok');
+      hint.textContent='Rostro detectado — puedes capturar';
+      if(enrollSamples.length<3)btn.disabled=false;
+    }else{
+      enrollFaceReady=false;
+      ring.classList.remove('ok');
+      hint.textContent='Buscando tu rostro…';
+      btn.disabled=true;
+    }
+  },700);
+}
+
+function updateEnrollSamplesUI(){
+  const dots=document.querySelectorAll('#enroll-samples .enroll-dot');
+  dots.forEach((d,i)=>d.classList.toggle('filled',i<enrollSamples.length));
+  const btn=document.getElementById('enroll-capture-btn');
+  btn.textContent=`Capturar muestra (${enrollSamples.length}/3)`;
+}
+
+async function capturarMuestra(){
+  if(!enrollFaceReady)return;
+  const v=document.getElementById('enroll-video');
+  const btn=document.getElementById('enroll-capture-btn');
+  btn.disabled=true;btn.textContent='Procesando…';
+  const desc=await getDescriptorFromVideo(v);
+  if(!desc){
+    btn.disabled=false;
+    document.getElementById('enroll-hint').textContent='No se detectó rostro nítido, intenta de nuevo';
+    updateEnrollSamplesUI();
+    return;
+  }
+  enrollSamples.push(Array.from(desc));
+  updateEnrollSamplesUI();
+
+  if(enrollSamples.length>=3){
+    await finalizarEnroll();
+  }else{
+    btn.disabled=false;
+    document.getElementById('enroll-hint').textContent='Muestra guardada. Mueve un poco la cabeza y captura otra.';
+  }
+}
+
+// Promedia los 3 descriptores en uno solo (mejora robustez)
+function promediarDescriptores(samples){
+  const n=samples.length,len=128,out=new Array(len).fill(0);
+  samples.forEach(s=>{for(let i=0;i<len;i++)out[i]+=s[i];});
+  for(let i=0;i<len;i++)out[i]/=n;
+  return out;
+}
+
+async function finalizarEnroll(){
+  document.getElementById('enroll-hint').textContent='Guardando…';
+  const descriptorFinal=promediarDescriptores(enrollSamples);
+
+  // Guardar descriptor en el empleado
+  const {error:e1}=await sb.from('empleado').update({descriptor_facial:descriptorFinal}).eq('id',enrollEmpleado.id);
+  if(e1){
+    document.getElementById('enroll-hint').textContent='Error al guardar: '+e1.message;
+    return;
+  }
+  // Marcar invitación como usada
+  await sb.from('invitacion').update({status:'usada'}).eq('id',enrollInvitacion.id);
+
+  // Vincular este dispositivo al empleado (para modo individual)
+  localStorage.setItem(DEVICE_KEY,enrollEmpleado.id);
+
+  stopEnrollCamera();
+  document.getElementById('enroll-done-msg').textContent=
+    `${empFull(enrollEmpleado)}, tu rostro quedó registrado. Este dispositivo también quedó vinculado a tu cuenta para checar en modo individual.`;
+  document.getElementById('enroll-step-face').classList.remove('active');
+  document.getElementById('enroll-step-done').classList.add('active');
+}
+
+// ══════════════════════════════════════════════════════════
+// TODAY LOG + STATS
 // ══════════════════════════════════════════════════════════
 function renderTodayLog(){
   const todayEvs=events.filter(e=>e.fecha===todayStr());
@@ -822,7 +1291,7 @@ function renderTodayLog(){
 }
 
 function renderEmpStats(){
-  const id=document.getElementById('emp-select').value;
+  const id=detectedEmpId;
   if(!id){document.getElementById('emp-stats-card').style.display='none';return;}
   document.getElementById('emp-stats-card').style.display='block';
   const empEvs=events.filter(e=>e.empleado_id===id);
@@ -841,15 +1310,6 @@ function renderEmpStats(){
       <div><div style="font-size:20px;font-weight:700;color:var(--accent2)">${days}</div><div style="font-size:11px;color:var(--text2)">Días registrados</div></div>
       <div><div style="font-size:20px;font-weight:700;color:var(--green)">${h}h ${m}m</div><div style="font-size:11px;color:var(--text2)">Horas trabajadas</div></div>
     </div>`;
-}
-
-function populateEmpSelect(){
-  const sel=document.getElementById('emp-select'),cur=sel.value;
-  sel.innerHTML='<option value="">— seleccionar —</option>';
-  employees.filter(e=>e.status==='activo').forEach(e=>{
-    const o=document.createElement('option');o.value=e.id;o.textContent=empFull(e);sel.appendChild(o);
-  });
-  if(cur)sel.value=cur;
 }
 
 // ══════════════════════════════════════════════════════════
@@ -994,13 +1454,18 @@ function renderEmpCatalog(){
   document.getElementById('emp-catalog-list').innerHTML=employees.length
     ?employees.map(emp=>{
       const branch=branchById(emp.sucursal_id);
+      const tieneRostro=emp.descriptor_facial&&Array.isArray(emp.descriptor_facial)&&emp.descriptor_facial.length===128;
+      const faceBadge=tieneRostro
+        ?`<span class="face-badge face-yes">✓ Rostro</span>`
+        :`<span class="face-badge face-no">Sin rostro</span>`;
       return `<div class="cat-card">
         ${empAvatarHtml(emp,42)}
         <div class="cat-card-info">
-          <div class="cat-card-name">${empFull(emp)} ${emp.numero_empleado?`<span style="font-size:11px;color:var(--text3);font-weight:400">${emp.numero_empleado}</span>`:''}</div>
+          <div class="cat-card-name">${empFull(emp)} ${emp.numero_empleado?`<span style="font-size:11px;color:var(--text3);font-weight:400">${emp.numero_empleado}</span>`:''} ${faceBadge}</div>
           <div class="cat-card-meta">${emp.puesto||'Sin puesto'} · ${branch?branch.nombre:'<span style="color:var(--amber)">Sin sucursal</span>'} · ${emp.turno||'matutino'} · ${emp.hora_entrada||'09:00'}–${emp.hora_salida||'18:00'} · <span style="color:${emp.status==='activo'?'var(--green)':'var(--text3)'}">${emp.status}</span></div>
         </div>
         <div class="cat-card-actions">
+          <button class="btn btn-outline btn-sm" onclick="generarInvitacion('${emp.id}')">${tieneRostro?'🔄 Re-invitar':'📩 Invitar'}</button>
           <button class="btn btn-outline btn-sm" onclick="openEmpModal('${emp.id}')">Editar</button>
           <button class="btn-ghost" onclick="deleteEmployee('${emp.id}')">✕</button>
         </div>
@@ -1059,15 +1524,58 @@ async function saveEmployee(){
   if(error){showToast('⚠',error.message,'error');return;}
   const {data}=await sb.from('empleado').select('*').eq('empresa_id',currentEmpresaId).order('apellido');
   employees=data||[];
-  closeModal('modal-emp');renderEmpCatalog();populateEmpSelect();
+  buildFaceMatcher();
+  closeModal('modal-emp');renderEmpCatalog();
   showToast('✓',`Empleado ${id?'actualizado':'registrado'}`,id?'':'success');
 }
 async function deleteEmployee(id){
   if(!confirm('¿Eliminar empleado?'))return;
   await sb.from('empleado').update({status:'inactivo'}).eq('id',id);
   const {data}=await sb.from('empleado').select('*').eq('empresa_id',currentEmpresaId).order('apellido');
-  employees=data||[];renderEmpCatalog();populateEmpSelect();
+  employees=data||[];buildFaceMatcher();renderEmpCatalog();
   showToast('✓','Empleado eliminado','');
+}
+
+// ══════════════════════════════════════════════════════════
+// GENERAR INVITACIÓN (admin) → tabla invitacion
+// ══════════════════════════════════════════════════════════
+let currentInvite=null;
+function genCode(){
+  const chars='ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // sin O/0/I/1 para evitar confusión
+  let s='';for(let i=0;i<5;i++)s+=chars[Math.floor(Math.random()*chars.length)];
+  return 'CT-'+s;
+}
+async function generarInvitacion(empId){
+  const emp=empById(empId);if(!emp)return;
+  showLoading(true);
+  const codigo=genCode();
+  const expira=new Date();expira.setDate(expira.getDate()+7);
+  const payload={
+    empresa_id:currentEmpresaId,
+    empleado_id:empId,
+    codigo,
+    status:'pendiente',
+    expira_at:expira.toISOString(),
+  };
+  const {data,error}=await sb.from('invitacion').insert(payload).select().single();
+  showLoading(false);
+  if(error){showToast('⚠','Error al generar código: '+error.message,'error');return;}
+  currentInvite={...data,empNombre:empFull(emp),empTel:emp.telefono};
+  document.getElementById('invite-emp-name').textContent='Para: '+empFull(emp);
+  document.getElementById('invite-code-display').textContent=codigo;
+  document.getElementById('invite-meta').textContent=`Expira el ${expira.toLocaleDateString('es-MX',{day:'numeric',month:'long'})} · Un solo uso`;
+  document.getElementById('modal-invite').classList.add('open');
+}
+function copyInvite(){
+  if(!currentInvite)return;
+  navigator.clipboard.writeText(currentInvite.codigo).then(()=>showToast('✓','Código copiado','success'));
+}
+function shareInviteWhatsApp(){
+  if(!currentInvite)return;
+  const msg=`Hola ${currentInvite.empNombre}, para registrar tu asistencia en CheckTime:\n\n1. Abre: ${window.location.origin}\n2. Toca "Soy empleado · tengo un código"\n3. Ingresa este código: ${currentInvite.codigo}\n4. Registra tu rostro\n\nEl código expira en 7 días.`;
+  const tel=(currentInvite.empTel||'').replace(/\D/g,'');
+  const url=tel?`https://wa.me/52${tel}?text=${encodeURIComponent(msg)}`:`https://wa.me/?text=${encodeURIComponent(msg)}`;
+  window.open(url,'_blank');
 }
 
 // ══════════════════════════════════════════════════════════
@@ -1088,7 +1596,6 @@ async function renderReports(){
   const now=new Date(),start=new Date(now);
   if(period==='week')start.setDate(now.getDate()-7);else start.setDate(now.getDate()-30);
   const startStr=start.toISOString().split('T')[0];
-  // Cargar eventos del periodo desde Supabase
   let q=sb.from('evento').select('*').eq('empresa_id',currentEmpresaId).gte('fecha',startStr).order('timestamp');
   if(bf!=='all')q=q.eq('sucursal_id',bf);
   if(ef!=='all')q=q.eq('empleado_id',ef);
@@ -1147,14 +1654,11 @@ async function exportCSV(){
 }
 
 // ══════════════════════════════════════════════════════════
-// MODALS
+// MODALS + TOAST
 // ══════════════════════════════════════════════════════════
 function closeModal(id){document.getElementById(id).classList.remove('open');}
 document.querySelectorAll('.modal-backdrop').forEach(m=>{m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('open');});});
 
-// ══════════════════════════════════════════════════════════
-// TOAST
-// ══════════════════════════════════════════════════════════
 let toastT;
 function showToast(icon,msg,type=''){
   const t=document.getElementById('toast');
@@ -1172,10 +1676,17 @@ sb.auth.onAuthStateChange(async(event,session)=>{
     await initSession(session.user);
   }else{
     showLoading(false);
+    // No forzar login si el usuario está en la pantalla de registro por código
+    if(document.getElementById('enroll-screen').style.display==='flex')return;
     document.getElementById('login-screen').style.display='flex';
     document.getElementById('app-screen').style.display='none';
     document.getElementById('onboarding-screen').style.display='none';
   }
+});
+
+// Uppercase automático en el campo de código
+document.getElementById('enroll-code').addEventListener('input',function(){
+  this.value=this.value.toUpperCase();
 });
 
 // Mostrar login mientras carga
