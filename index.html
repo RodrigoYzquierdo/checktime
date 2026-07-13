@@ -1130,24 +1130,34 @@ async function validarCodigo(){
   if(!code){errEl.textContent='Ingresa tu código';errEl.style.display='block';return;}
 
   showLoading(true);
-  // Buscar invitación por código
-  const {data:inv,error}=await sb.from('invitacion').select('*').eq('codigo',code).maybeSingle();
+  // Validar código vía RPC (security definer) — funciona sin sesión iniciada
+  const {data:res,error}=await sb.rpc('validar_invitacion',{p_codigo:code});
   showLoading(false);
 
   if(error){errEl.textContent='Error de conexión. Intenta de nuevo.';errEl.style.display='block';return;}
-  if(!inv){errEl.textContent='Código no encontrado. Verifica con tu administrador.';errEl.style.display='block';return;}
-  if(inv.status==='usada'){errEl.textContent='Este código ya fue utilizado.';errEl.style.display='block';return;}
-  if(inv.status==='expirada'||(inv.expira_at && new Date(inv.expira_at)<new Date())){
-    errEl.textContent='Este código ha expirado. Pide uno nuevo.';errEl.style.display='block';return;
+  if(!res||!res.ok){
+    const errores={
+      no_encontrado:'Código no encontrado. Verifica con tu administrador.',
+      usada:'Este código ya fue utilizado.',
+      expirada:'Este código ha expirado. Pide uno nuevo.',
+      sin_empleado:'El empleado de esta invitación ya no existe.',
+    };
+    errEl.textContent=errores[res?.error]||'Código inválido.';
+    errEl.style.display='block';return;
   }
 
-  // Cargar empleado ligado a la invitación
-  const {data:emp}=await sb.from('empleado').select('*').eq('id',inv.empleado_id).maybeSingle();
-  if(!emp){errEl.textContent='El empleado de esta invitación ya no existe.';errEl.style.display='block';return;}
-
-  enrollInvitacion=inv;
-  enrollEmpleado=emp;
+  // La RPC devuelve solo los datos mínimos del empleado
+  enrollInvitacion={id:res.invitacion_id};
+  enrollEmpleado={
+    id:res.empleado_id,
+    nombre:res.nombre,
+    apellido:res.apellido,
+    puesto:res.puesto,
+    sucursal_id:res.sucursal_id,
+    empresa_id:res.empresa_id,
+  };
   enrollSamples=[];
+  const emp=enrollEmpleado;
 
   // Preparar paso 2
   const branch=null; // no cargamos sucursal aquí para no exponer datos
@@ -1251,14 +1261,16 @@ async function finalizarEnroll(){
   document.getElementById('enroll-hint').textContent='Guardando…';
   const descriptorFinal=promediarDescriptores(enrollSamples);
 
-  // Guardar descriptor en el empleado
-  const {error:e1}=await sb.from('empleado').update({descriptor_facial:descriptorFinal}).eq('id',enrollEmpleado.id);
-  if(e1){
-    document.getElementById('enroll-hint').textContent='Error al guardar: '+e1.message;
+  // Guardar descriptor + marcar invitación usada vía RPC (security definer)
+  const {data:res,error:e1}=await sb.rpc('registrar_rostro',{
+    p_invitacion_id:enrollInvitacion.id,
+    p_descriptor:descriptorFinal,
+  });
+  if(e1||!res||!res.ok){
+    const msg = e1?e1.message : (res?.error==='ya_usada'?'Este código ya fue usado':'No se pudo guardar');
+    document.getElementById('enroll-hint').textContent='Error al guardar: '+msg;
     return;
   }
-  // Marcar invitación como usada
-  await sb.from('invitacion').update({status:'usada'}).eq('id',enrollInvitacion.id);
 
   // Vincular este dispositivo al empleado (para modo individual)
   localStorage.setItem(DEVICE_KEY,enrollEmpleado.id);
