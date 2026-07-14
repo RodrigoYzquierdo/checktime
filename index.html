@@ -686,7 +686,7 @@ function buildFaceMatcher(){
 async function loginGoogle(){
   const {error}=await sb.auth.signInWithOAuth({
     provider:'google',
-    options:{redirectTo:window.location.href}
+    options:{redirectTo:window.location.origin+window.location.pathname}
   });
   if(error)showToast('⚠',error.message,'error');
 }
@@ -1685,6 +1685,10 @@ function showToast(icon,msg,type=''){
 // ══════════════════════════════════════════════════════════
 sb.auth.onAuthStateChange(async(event,session)=>{
   if(session?.user){
+    // Limpiar tokens OAuth de la URL (#access_token=...) para que no estorben
+    if(window.location.hash && window.location.hash.includes('access_token')){
+      history.replaceState(null,'',window.location.origin+window.location.pathname);
+    }
     await initSession(session.user);
   }else{
     showLoading(false);
@@ -1695,6 +1699,16 @@ sb.auth.onAuthStateChange(async(event,session)=>{
     document.getElementById('onboarding-screen').style.display='none';
   }
 });
+
+// Limpieza defensiva: si al cargar hay un hash OAuth malformado (## duplicado), lo normalizamos
+(function cleanupOAuthHash(){
+  const h=window.location.hash;
+  if(h && h.startsWith('##')){
+    // Corregir doble almohadilla para que Supabase pueda leer el token
+    const fixed='#'+h.replace(/^#+/,'');
+    history.replaceState(null,'',window.location.origin+window.location.pathname+window.location.search+fixed);
+  }
+})();
 
 // Uppercase automático en el campo de código
 document.getElementById('enroll-code').addEventListener('input',function(){
