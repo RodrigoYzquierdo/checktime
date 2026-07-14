@@ -66,6 +66,27 @@
   .enroll-dot.filled{background:var(--green);box-shadow:0 0 8px var(--green);}
   .enroll-emp-preview{display:flex;align-items:center;gap:12px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;margin-bottom:20px;}
 
+  /* ── EMPLEADO ── */
+  #emp-screen{display:none;min-height:100vh;}
+  .emp-welcome{display:flex;align-items:center;justify-content:center;min-height:100vh;padding:24px;}
+  .emp-welcome-card{background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius);padding:40px 32px;width:100%;max-width:380px;text-align:center;}
+  .emp-welcome-avatar{margin:0 auto 20px;}
+  .emp-welcome-avatar img,.emp-welcome-avatar .emp-avatar{width:72px !important;height:72px !important;font-size:24px !important;margin:0 auto;}
+  .emp-welcome-hi{font-size:22px;font-weight:700;letter-spacing:-0.4px;}
+  .emp-welcome-hi span{color:var(--accent2);}
+  .emp-welcome-sub{font-size:13px;color:var(--text2);margin-top:6px;}
+  .emp-checador{display:none;max-width:440px;margin:0 auto;padding:16px;flex-direction:column;gap:14px;}
+  .emp-checador.active{display:flex;}
+  .emp-top{display:flex;align-items:center;justify-content:space-between;padding:4px 0 8px;}
+  .emp-clock-wrap{text-align:center;}
+  #emp-live-clock{font-size:40px;font-weight:700;letter-spacing:-1px;font-variant-numeric:tabular-nums;}
+  #emp-live-date{font-size:13px;color:var(--text2);margin-top:2px;}
+  .emp-cam-wrap .camera-container{aspect-ratio:3/4;max-height:380px;}
+  .emp-loc-chip{display:flex;align-items:center;gap:8px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 14px;font-size:12px;color:var(--text2);justify-content:center;}
+  .emp-actions{display:flex;flex-direction:column;gap:10px;}
+  .emp-actions .btn{padding:15px;font-size:15px;}
+  .emp-today{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px;}
+
   /* ── APP ── */
   #app-screen{display:none;}
   nav{display:flex;align-items:center;justify-content:space-between;padding:0 24px;height:56px;border-bottom:1px solid var(--border);background:var(--surface);position:sticky;top:0;z-index:100;gap:12px;}
@@ -329,7 +350,60 @@
       <div style="font-size:48px;margin:20px 0">✅</div>
       <div class="enroll-title">¡Rostro registrado!</div>
       <div class="enroll-sub" id="enroll-done-msg">Ya puedes checar en el dispositivo de tu centro de trabajo.</div>
-      <button class="btn btn-primary" onclick="backToLogin()">Entendido</button>
+      <button class="btn btn-primary" onclick="irAEmpleado()">Continuar a checar →</button>
+    </div>
+  </div>
+</div>
+
+<!-- EMPLEADO: pantalla de bienvenida + checador mínimo -->
+<div id="emp-screen">
+  <!-- Bienvenida -->
+  <div class="emp-welcome" id="emp-welcome">
+    <div class="emp-welcome-card">
+      <div class="login-logo" style="margin-bottom:24px">⬡ Check<span>Time</span></div>
+      <div class="emp-welcome-avatar" id="emp-welcome-avatar"></div>
+      <div class="emp-welcome-hi">Hola, <span id="emp-welcome-name">—</span></div>
+      <div class="emp-welcome-sub" id="emp-welcome-sub"></div>
+      <button class="btn btn-primary" style="margin-top:24px" onclick="empIniciarChecado()">Checar asistencia →</button>
+      <button class="btn-ghost" style="margin-top:14px;width:100%" onclick="empSalirALogin()">¿Eres administrador? Entrar con cuenta</button>
+    </div>
+  </div>
+
+  <!-- Checador del empleado -->
+  <div class="emp-checador" id="emp-checador">
+    <div class="emp-top">
+      <div class="logo">⬡ Check<span>Time</span></div>
+      <button class="btn-logout" onclick="empVolverBienvenida()">← Volver</button>
+    </div>
+    <div class="emp-clock-wrap">
+      <div id="emp-live-clock">00:00:00</div>
+      <div id="emp-live-date"></div>
+    </div>
+    <div class="emp-cam-wrap">
+      <div class="camera-container">
+        <video id="emp-video" autoplay muted playsinline></video>
+        <div class="camera-overlay">
+          <div class="face-frame scanning" id="emp-face-frame"></div>
+          <div class="scan-status scanning" id="emp-scan-status">Mira a la cámara</div>
+        </div>
+        <div class="camera-disabled" id="emp-camera-disabled" style="display:none">
+          <div style="font-size:48px">📷</div>
+          <div style="font-size:13px">Cámara no disponible</div>
+          <button class="btn btn-outline btn-sm" style="margin-top:8px" onclick="empStartCamera()">Reintentar</button>
+        </div>
+      </div>
+    </div>
+    <div class="emp-loc-chip">
+      <div class="loc-dot" id="emp-loc-dot"></div>
+      <span id="emp-loc-text">Obteniendo ubicación…</span>
+    </div>
+    <div class="emp-actions">
+      <button class="btn btn-primary" id="emp-btn-entrada" onclick="empChecar('entrada')" disabled>→ Registrar Entrada</button>
+      <button class="btn btn-danger" id="emp-btn-salida" onclick="empChecar('salida')" disabled>← Registrar Salida</button>
+    </div>
+    <div class="emp-today">
+      <div class="card-title">Tus registros de hoy</div>
+      <div id="emp-today-log"><div class="empty-state">Sin registros aún</div></div>
     </div>
   </div>
 </div>
@@ -1032,7 +1106,8 @@ function initLocation(){
     const ds=best.dist<1000?`${Math.round(best.dist)}m`:`${(best.dist/1000).toFixed(1)}km`;
     setLocUI(locVerified,locVerified?`${best.branch.nombre} · ${ds} · Verificada`:`Fuera de rango · ${ds} de ${best.branch.nombre}`,`${userLoc.lat.toFixed(5)}, ${userLoc.lng.toFixed(5)}`);
     updateBtns();
-  },()=>{locVerified=true;nearBranch=branches[0]||null;setLocUI(true,branches.length?`Modo demo · ${branches[0].nombre}`:'Modo demo');updateBtns();});
+  },()=>{locVerified=false;nearBranch=null;setLocUI(false,'Activa el GPS para poder checar');updateBtns();},
+  {enableHighAccuracy:true,timeout:10000,maximumAge:0});
 }
 function setLocUI(ok,txt,det=''){
   document.getElementById('loc-dot').className='loc-dot '+(ok?'verified':'unverified');
@@ -1073,19 +1148,31 @@ async function registrarEvento(tipo){
 
   const payload={
     empleado_id:empId,
-    sucursal_id:branch?branch.id:emp.sucursal_id,
-    empresa_id:currentEmpresaId,
     tipo,
-    timestamp:now.toISOString(),
-    fecha:todayStr(),
     lat:userLoc?.lat||null,
     lng:userLoc?.lng||null,
     fuente:modoChecador==='kiosko'?'kiosko':'app',
-    confianza_facial:null,
   };
 
-  const {data,error}=await sb.from('evento').insert(payload).select().single();
+  // Usar RPC con geofencing en servidor (misma validación para todos los caminos)
+  const {data:res,error}=await sb.rpc('checar_empleado',{
+    p_empleado_id:empId,
+    p_tipo:tipo,
+    p_lat:payload.lat,
+    p_lng:payload.lng,
+    p_fuente:payload.fuente,
+  });
   if(error){showToast('⚠','Error al registrar: '+error.message,'error');updateBtns();return;}
+  if(!res||!res.ok){
+    const msgs={
+      sin_gps:'No se pudo obtener la ubicación. Activa el GPS.',
+      fuera_de_rango:`Fuera del rango permitido${res.distancia?` (${res.distancia}m de ${res.radio}m)`:''}.`,
+      empleado_invalido:'El empleado no está activo.',
+      tipo_invalido:'Acción inválida.',
+    };
+    showToast('⚠',msgs[res.error]||'No se pudo registrar','error');updateBtns();return;
+  }
+  const data=res.evento;
 
   events.unshift(data);
   showToast(tipo==='entrada'?'✓':'⏎',`${tipo==='entrada'?'Entrada':'Salida'} · ${empFull(emp)} — ${padZ(now.getHours())}:${padZ(now.getMinutes())}`,tipo==='entrada'?'success':'');
@@ -1280,6 +1367,251 @@ async function finalizarEnroll(){
     `${empFull(enrollEmpleado)}, tu rostro quedó registrado. Este dispositivo también quedó vinculado a tu cuenta para checar en modo individual.`;
   document.getElementById('enroll-step-face').classList.remove('active');
   document.getElementById('enroll-step-done').classList.add('active');
+}
+
+// ══════════════════════════════════════════════════════════
+// PANTALLA DEL EMPLEADO (dispositivo vinculado, sin sesión admin)
+// ══════════════════════════════════════════════════════════
+let empData=null;              // {empleado, sucursal, eventos_hoy}
+let empStream=null;
+let empRecogLoop=null;
+let empFaceOk=false;
+let empLoc=null, empLocVerified=false, empDist=null;
+let empClockInt=null;
+
+// ¿Hay un empleado vinculado a este dispositivo?
+function dispositivoVinculado(){
+  return localStorage.getItem(DEVICE_KEY);
+}
+
+// Punto de entrada: mostrar la pantalla del empleado con bienvenida
+async function abrirPantallaEmpleado(){
+  const empId=dispositivoVinculado();
+  if(!empId){empSalirALogin();return;}
+
+  // Ocultar todo lo demás
+  ['login-screen','onboarding-screen','enroll-screen','app-screen'].forEach(id=>{
+    document.getElementById(id).style.display='none';
+  });
+  document.getElementById('emp-screen').style.display='block';
+  document.getElementById('emp-welcome').style.display='flex';
+  document.getElementById('emp-checador').classList.remove('active');
+
+  showLoading(true);
+  // Cargar datos del empleado vía RPC (funciona sin sesión)
+  const {data:res,error}=await sb.rpc('datos_empleado_dispositivo',{p_empleado_id:empId});
+  showLoading(false);
+
+  if(error||!res||!res.ok){
+    // El empleado ya no existe o fue desactivado → limpiar vínculo y volver a login
+    localStorage.removeItem(DEVICE_KEY);
+    showToast('⚠','Tu registro ya no está activo. Contacta a tu administrador.','error');
+    empSalirALogin();
+    return;
+  }
+
+  empData=res;
+  const emp=res.empleado;
+  // Avatar + nombre en bienvenida
+  const c=cl(0);
+  const initials=(emp.nombre[0]+emp.apellido[0]).toUpperCase();
+  document.getElementById('emp-welcome-avatar').innerHTML=
+    `<div class="emp-avatar" style="color:${c.c};background:${c.bg}">${initials}</div>`;
+  document.getElementById('emp-welcome-name').textContent=emp.nombre;
+  document.getElementById('emp-welcome-sub').textContent=
+    (emp.puesto?emp.puesto+' · ':'')+(res.sucursal?res.sucursal.nombre:'');
+
+  // Cargar modelos faciales en segundo plano
+  loadFaceModels();
+}
+
+// Botón "Checar asistencia" → pasa al checador
+async function empIniciarChecado(){
+  document.getElementById('emp-welcome').style.display='none';
+  document.getElementById('emp-checador').classList.add('active');
+  empTick();
+  if(empClockInt)clearInterval(empClockInt);
+  empClockInt=setInterval(empTick,1000);
+  renderEmpTodayLog();
+  await empStartCamera();
+  empInitLocation();
+  const ok=await loadFaceModels();
+  if(ok)empStartRecognition();
+  else setEmpScan('error','Reconocimiento facial no disponible');
+}
+
+function empVolverBienvenida(){
+  empStopCamera();
+  document.getElementById('emp-checador').classList.remove('active');
+  document.getElementById('emp-welcome').style.display='flex';
+}
+
+function empSalirALogin(){
+  empStopCamera();
+  if(empClockInt){clearInterval(empClockInt);empClockInt=null;}
+  document.getElementById('emp-screen').style.display='none';
+  document.getElementById('login-screen').style.display='flex';
+}
+
+// Después de registrar rostro, ir directo a la pantalla del empleado
+function irAEmpleado(){
+  document.getElementById('enroll-screen').style.display='none';
+  abrirPantallaEmpleado();
+}
+
+function empTick(){
+  const n=new Date();
+  const clk=document.getElementById('emp-live-clock');
+  if(clk)clk.textContent=`${padZ(n.getHours())}:${padZ(n.getMinutes())}:${padZ(n.getSeconds())}`;
+  const D=['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
+  const M=['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+  const dt=document.getElementById('emp-live-date');
+  if(dt)dt.textContent=`${D[n.getDay()]}, ${n.getDate()} de ${M[n.getMonth()]} de ${n.getFullYear()}`;
+}
+
+// ── Cámara del empleado ──
+async function empStartCamera(){
+  try{
+    empStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'user'},audio:false});
+    const v=document.getElementById('emp-video');v.srcObject=empStream;
+    document.getElementById('emp-camera-disabled').style.display='none';
+    v.style.display='block';
+    await v.play().catch(()=>{});
+    return true;
+  }catch{
+    document.getElementById('emp-video').style.display='none';
+    document.getElementById('emp-camera-disabled').style.display='flex';
+    return false;
+  }
+}
+function empStopCamera(){
+  if(empRecogLoop){clearInterval(empRecogLoop);empRecogLoop=null;}
+  if(empStream){empStream.getTracks().forEach(t=>t.stop());empStream=null;}
+}
+
+function setEmpScan(state,text){
+  const st=document.getElementById('emp-scan-status');
+  const fr=document.getElementById('emp-face-frame');
+  st.textContent=text;
+  st.className='scan-status '+(state||'');
+  fr.classList.toggle('scanning',state==='scanning'||state==='');
+  fr.style.borderColor = state==='success'?'var(--green)':state==='error'?'var(--red)':'var(--accent)';
+}
+
+// ── Reconocimiento facial 1:1 del empleado ──
+function empStartRecognition(){
+  if(empRecogLoop)clearInterval(empRecogLoop);
+  const v=document.getElementById('emp-video');
+  const desc=empData.empleado.descriptor_facial;
+  if(!desc||!Array.isArray(desc)||desc.length!==128){
+    setEmpScan('error','Sin rostro registrado. Contacta a tu admin.');return;
+  }
+  const refDesc=new Float32Array(desc);
+  empRecogLoop=setInterval(async()=>{
+    if(document.hidden||!v.srcObject||v.readyState<2)return;
+    const live=await getDescriptorFromVideo(v);
+    if(!live){empFaceOk=false;setEmpScan('scanning','Mira a la cámara');empUpdateBtns();return;}
+    const dist=faceapi.euclideanDistance(live,refDesc);
+    if(dist<=FACE_THRESHOLD){
+      empFaceOk=true;
+      setEmpScan('success','✓ '+empData.empleado.nombre+' — identificado');
+    }else{
+      empFaceOk=false;
+      setEmpScan('error','No coincide con tu rostro registrado');
+    }
+    empUpdateBtns();
+  },1200);
+}
+
+// ── GPS del empleado (Opción 2: obligatorio, radio configurable) ──
+function empInitLocation(){
+  const suc=empData.sucursal;
+  if(!navigator.geolocation){empSetLoc(false,'GPS no disponible en este dispositivo');empUpdateBtns();return;}
+  navigator.geolocation.watchPosition(pos=>{
+    empLoc={lat:pos.coords.latitude,lng:pos.coords.longitude};
+    if(!suc||suc.latitud==null){
+      // Sin sucursal con coordenadas: no se puede validar → permitir (raro)
+      empLocVerified=true;empSetLoc(true,'Ubicación registrada');empUpdateBtns();return;
+    }
+    const d=haversine(empLoc.lat,empLoc.lng,suc.latitud,suc.longitud);
+    empDist=d;
+    const radio=suc.radio_metros||200;
+    empLocVerified=d<=radio;
+    const ds=d<1000?`${Math.round(d)}m`:`${(d/1000).toFixed(1)}km`;
+    empSetLoc(empLocVerified,
+      empLocVerified?`${suc.nombre} · ${ds} · En rango ✓`:`Fuera de rango · ${ds} de ${suc.nombre}`);
+    empUpdateBtns();
+  },()=>{
+    empLocVerified=false;
+    empSetLoc(false,'Activa el GPS para poder checar');
+    empUpdateBtns();
+  },{enableHighAccuracy:true,timeout:10000,maximumAge:0});
+}
+function empSetLoc(ok,txt){
+  document.getElementById('emp-loc-dot').className='loc-dot '+(ok?'verified':'unverified');
+  document.getElementById('emp-loc-text').textContent=txt;
+}
+
+// ── Botones del empleado ──
+function empUpdateBtns(){
+  const ok=empFaceOk&&empLocVerified;
+  const evs=(empData.eventos_hoy||[]).slice().sort((a,b)=>new Date(b.timestamp)-new Date(a.timestamp));
+  const last=evs[0];
+  const isIn=last&&last.tipo==='entrada';
+  document.getElementById('emp-btn-entrada').disabled=!ok||isIn;
+  document.getElementById('emp-btn-salida').disabled=!ok||!isIn;
+}
+
+// ── Checar (entrada/salida) vía RPC con geofencing en servidor ──
+async function empChecar(tipo){
+  if(!empFaceOk){showToast('⚠','Primero debemos reconocer tu rostro','error');return;}
+  if(!empLocVerified){showToast('⚠','Estás fuera del rango permitido','error');return;}
+  document.getElementById('emp-btn-entrada').disabled=true;
+  document.getElementById('emp-btn-salida').disabled=true;
+
+  const {data:res,error}=await sb.rpc('checar_empleado',{
+    p_empleado_id:empData.empleado.id,
+    p_tipo:tipo,
+    p_lat:empLoc?empLoc.lat:null,
+    p_lng:empLoc?empLoc.lng:null,
+    p_fuente:'app',
+  });
+
+  if(error){showToast('⚠','Error: '+error.message,'error');empUpdateBtns();return;}
+  if(!res||!res.ok){
+    const msgs={
+      sin_gps:'No se pudo obtener tu ubicación. Activa el GPS.',
+      fuera_de_rango:`Estás fuera del rango permitido${res.distancia?` (${res.distancia}m de ${res.radio}m)`:''}.`,
+      empleado_invalido:'Tu registro no está activo.',
+      tipo_invalido:'Acción inválida.',
+    };
+    showToast('⚠',msgs[res.error]||'No se pudo registrar','error');
+    empUpdateBtns();return;
+  }
+
+  // Éxito
+  empData.eventos_hoy.unshift(res.evento);
+  const t=new Date(res.evento.timestamp);
+  showToast(tipo==='entrada'?'✓':'⏎',
+    `${tipo==='entrada'?'Entrada':'Salida'} registrada — ${padZ(t.getHours())}:${padZ(t.getMinutes())}`,
+    tipo==='entrada'?'success':'');
+  renderEmpTodayLog();
+  empUpdateBtns();
+}
+
+function renderEmpTodayLog(){
+  const c=document.getElementById('emp-today-log');
+  const evs=(empData?.eventos_hoy||[]).slice().sort((a,b)=>new Date(b.timestamp)-new Date(a.timestamp));
+  if(!evs.length){c.innerHTML='<div class="empty-state">Sin registros aún</div>';return;}
+  c.innerHTML=evs.map(e=>{
+    const t=new Date(e.timestamp);
+    return `<div class="log-entry">
+      <div class="log-dot ${e.tipo}"></div>
+      <div class="log-time">${padZ(t.getHours())}:${padZ(t.getMinutes())}</div>
+      <div class="log-name">${e.tipo==='entrada'?'→ Entrada':'← Salida'}</div>
+      <div class="log-hours">${empData.sucursal?empData.sucursal.nombre:''}</div>
+    </div>`;
+  }).join('');
 }
 
 // ══════════════════════════════════════════════════════════
@@ -1694,6 +2026,13 @@ sb.auth.onAuthStateChange(async(event,session)=>{
     showLoading(false);
     // No forzar login si el usuario está en la pantalla de registro por código
     if(document.getElementById('enroll-screen').style.display==='flex')return;
+    // Si la pantalla de empleado ya está visible, no interrumpir
+    if(document.getElementById('emp-screen').style.display==='block')return;
+    // Si este dispositivo está vinculado a un empleado → pantalla de empleado directo
+    if(dispositivoVinculado()){
+      abrirPantallaEmpleado();
+      return;
+    }
     document.getElementById('login-screen').style.display='flex';
     document.getElementById('app-screen').style.display='none';
     document.getElementById('onboarding-screen').style.display='none';
